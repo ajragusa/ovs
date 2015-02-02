@@ -16,6 +16,7 @@
 
 #include <config.h>
 #include "ofp-print.h"
+#include <string.h>
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -3263,9 +3264,10 @@ ofputil_encode_ofp10_phy_port(const struct ofputil_phy_port *pp,
                               struct ofp10_phy_port *opp)
 {
     memset(opp, 0, sizeof *opp);
-
+    
     opp->port_no = htons(ofp_to_u16(pp->port_no));
     memcpy(opp->hw_addr, pp->hw_addr, ETH_ADDR_LEN);
+    VLOG_WARN("OFPH10_PHY_PORT: %s", pp->name);
     ovs_strlcpy(opp->name, pp->name, OFP_MAX_PORT_NAME_LEN);
 
     opp->config = htonl(pp->config & OFPPC10_ALL);
@@ -3584,12 +3586,15 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
  * and appends the encoded version to 'b'. */
 void
 ofputil_put_switch_features_port(const struct ofputil_phy_port *pp,
-                                 struct ofpbuf *b)
+                                 struct ofpbuf *b,
+				 const char *port_name)
 {
     const struct ofp_header *oh = b->data;
-
+    VLOG_WARN("PORT NAME: %s", port_name);
     if (oh->version < OFP13_VERSION) {
-        ofputil_put_phy_port(oh->version, pp, b);
+      ovs_strlcpy(pp->name, port_name, sizeof pp->name);
+      VLOG_WARN("NEW PORT NAME: %s",pp->name);
+      ofputil_put_phy_port(oh->version, pp, b);
     }
 }
 

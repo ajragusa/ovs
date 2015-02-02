@@ -484,6 +484,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->frag_handling = OFPC_FRAG_NORMAL;
     hmap_init(&ofproto->ports);
     shash_init(&ofproto->port_by_name);
+    shash_init(&ofproto->port_name_by_name);
     simap_init(&ofproto->ofp_requests);
     ofproto->max_ports = ofp_to_u16(OFPP_MAX);
     ofproto->eviction_group_timer = LLONG_MIN;
@@ -1227,6 +1228,7 @@ ofproto_destroy__(struct ofproto *ofproto)
     free(ofproto->dp_desc);
     hmap_destroy(&ofproto->ports);
     shash_destroy(&ofproto->port_by_name);
+    shash_destroy(&ofproto->port_name_by_name);
     bitmap_free(ofproto->ofp_port_ids);
     simap_destroy(&ofproto->ofp_requests);
 
@@ -1292,6 +1294,7 @@ process_port_change(struct ofproto *ofproto, int error, char *devname)
     if (error == ENOBUFS) {
         reinit_ports(ofproto);
     } else if (!error) {
+        
         update_port(ofproto, devname);
         free(devname);
     }
@@ -1712,7 +1715,7 @@ ofproto_port_open_type(const char *datapath_type, const char *port_type)
  * 'ofp_portp' is non-null). */
 int
 ofproto_port_add(struct ofproto *ofproto, struct netdev *netdev,
-                 ofp_port_t *ofp_portp)
+                 ofp_port_t *ofp_portp, const char *port_name)
 {
     ofp_port_t ofp_port = ofp_portp ? *ofp_portp : OFPP_NONE;
     int error;
@@ -1723,6 +1726,7 @@ ofproto_port_add(struct ofproto *ofproto, struct netdev *netdev,
 
         simap_put(&ofproto->ofp_requests, netdev_name,
                   ofp_to_u16(ofp_port));
+	shash_add(&ofproto->port_name_by_name, netdev_get_name(netdev), port_name);
         update_port(ofproto, netdev_name);
     }
     if (ofp_portp) {
@@ -1731,6 +1735,8 @@ ofproto_port_add(struct ofproto *ofproto, struct netdev *netdev,
         ofproto_port_query_by_name(ofproto, netdev_get_name(netdev),
                                    &ofproto_port);
         *ofp_portp = error ? OFPP_NONE : ofproto_port.ofp_port;
+
+	shash_add(&ofproto->port_name_by_name, netdev_get_name(netdev), port_name);
         ofproto_port_destroy(&ofproto_port);
     }
     return error;
@@ -2064,13 +2070,20 @@ ofport_install(struct ofproto *p,
     hmap_insert(&p->ports, &ofport->hmap_node,
                 hash_ofp_port(ofport->ofp_port));
     shash_add(&p->port_by_name, netdev_name, ofport);
-
+    shash_add(&p->port_name_by_name, netdev_name, shash_find_data(&p->port_name_by_name, netdev_name));
     update_mtu(p, ofport);
 
     /* Let the ofproto_class initialize its private data. */
     error = p->ofproto_class->port_construct(ofport);
     if (error) {
         goto error;
+    }
+    
+    char *real_name = shash_find_data(&p->port_name_by_name, netdev_name);
+    if(!real_name){
+
+    }else{
+      ovs_strlcpy(pp->name,  shash_find_data(&p->port_name_by_name, netdev_name), sizeof pp->name);
     }
     connmgr_send_port_status(p->connmgr, pp, OFPPR_ADD);
     return;
@@ -2124,6 +2137,12 @@ ofport_modified(struct ofport *port, struct ofputil_phy_port *pp)
     port->pp.curr_speed = pp->curr_speed;
     port->pp.max_speed = pp->max_speed;
 
+    char *port_name = shash_find_data(&port->ofproto->port_name_by_name, port->pp.name);
+    if(!port_name){
+
+    }else{
+      ovs_strlcpy(port->pp.name,  port_name, sizeof port->pp.name);
+    }
     connmgr_send_port_status(port->ofproto->connmgr, &port->pp, OFPPR_MODIFY);
 }
 
@@ -2133,6 +2152,13 @@ ofproto_port_set_state(struct ofport *port, enum ofputil_port_state state)
 {
     if (port->pp.state != state) {
         port->pp.state = state;
+	
+	char *port_name = shash_find_data(&port->ofproto->port_name_by_name, port->pp.name);
+	if(!port_name){
+
+	}else{
+	  ovs_strlcpy(port->pp.name,  port_name, sizeof port->pp.name);
+	}
         connmgr_send_port_status(port->ofproto->connmgr, &port->pp,
                                  OFPPR_MODIFY);
     }
@@ -2243,7 +2269,6 @@ update_port(struct ofproto *ofproto, const char *name)
              * remove a retained reference to it.*/
             port->netdev = netdev;
             port->change_seq = netdev_change_seq(netdev);
-
             if (port->ofproto->ofproto_class->port_modified) {
                 port->ofproto->ofproto_class->port_modified(port);
             }
@@ -2293,7 +2318,7 @@ init_ports(struct ofproto *p)
 
             netdev = ofport_open(p, &ofproto_port, &pp);
             if (netdev) {
-                ofport_install(p, netdev, &pp);
+	      ofport_install(p, netdev, &pp);
                 if (ofp_to_u16(ofproto_port.ofp_port) < p->max_ports) {
                     p->alloc_port_no = MAX(p->alloc_port_no,
                                            ofp_to_u16(ofproto_port.ofp_port));
@@ -2610,7 +2635,7 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofpbuf *b;
     int n_tables;
     int i;
-
+    char *name;
     ofproto->ofproto_class->get_features(ofproto, &arp_match_ip,
                                          &features.actions);
     ovs_assert(features.actions & OFPUTIL_A_OUTPUT); /* sanity check */
@@ -2638,7 +2663,15 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     b = ofputil_encode_switch_features(&features, ofconn_get_protocol(ofconn),
                                        oh->xid);
     HMAP_FOR_EACH (port, hmap_node, &ofproto->ports) {
-        ofputil_put_switch_features_port(&port->pp, b);
+      
+      VLOG_WARN("Looking for the real port name %s!!", port->pp.name);
+      name = (char *)shash_find_data(&ofproto->port_name_by_name, port->pp.name);
+      VLOG_WARN("REAL PORT NAME: %s",name);
+
+      if(!name){
+	name = port->pp.name;
+      }
+      ofputil_put_switch_features_port(&port->pp, b, name);
     }
 
     ofconn_send_reply(ofconn, b);

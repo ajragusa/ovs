@@ -1134,12 +1134,12 @@ check_conflicts(struct vsctl_context *ctx, const char *name,
                     msg, name);
     }
 
-    port = shash_find_data(&ctx->ports, name);
+    /*    port = shash_find_data(&ctx->ports, name);
     if (port) {
         vsctl_fatal("%s because a port named %s already exists on "
                     "bridge %s", msg, name, port->bridge->name);
     }
-
+    */
     iface = shash_find_data(&ctx->ifaces, name);
     if (iface) {
         vsctl_fatal("%s because an interface named %s already exists "

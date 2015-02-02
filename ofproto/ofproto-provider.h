@@ -81,6 +81,7 @@ struct ofproto {
     /* Datapath. */
     struct hmap ports;          /* Contains "struct ofport"s. */
     struct shash port_by_name;
+    struct shash port_name_by_name;
     unsigned long *ofp_port_ids;/* Bitmap of used OpenFlow port numbers. */
     struct simap ofp_requests;  /* OpenFlow port number requests. */
     uint16_t alloc_port_no;     /* Last allocated OpenFlow port number. */
@@ -163,6 +164,7 @@ struct ofport {
     struct ofproto *ofproto;    /* The ofproto that contains this port. */
     struct netdev *netdev;
     struct ofputil_phy_port pp;
+    char *port_name;
     ofp_port_t ofp_port;        /* OpenFlow port number. */
     unsigned int change_seq;
     long long int created;      /* Time created, in msec. */

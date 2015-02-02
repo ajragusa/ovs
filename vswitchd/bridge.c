@@ -1497,7 +1497,7 @@ iface_do_create(const struct bridge *br,
     if (*ofp_portp == OFPP_NONE) {
         ofp_port_t ofp_port = if_cfg->ofport;
 
-        error = ofproto_port_add(br->ofproto, netdev, &ofp_port);
+        error = ofproto_port_add(br->ofproto, netdev, &ofp_port, port_cfg->name);
         if (error) {
             goto error;
         }
@@ -1595,7 +1595,7 @@ iface_create(struct bridge *br, struct if_cfg *if_cfg, ofp_port_t ofp_port)
             if (!error) {
                 ofp_port_t fake_ofp_port = if_cfg->ofport;
 
-                ofproto_port_add(br->ofproto, netdev, &fake_ofp_port);
+                ofproto_port_add(br->ofproto, netdev, &fake_ofp_port, port->name);
                 netdev_close(netdev);
             } else {
                 VLOG_WARN("could not open network device %s (%s)",

@@ -438,6 +438,7 @@ struct ofputil_phy_port {
     ofp_port_t port_no;
     uint8_t hw_addr[OFP_ETH_ALEN];
     char name[OFP_MAX_PORT_NAME_LEN];
+    char port_name[OFP_MAX_PORT_NAME_LEN];
     enum ofputil_port_config config;
     enum ofputil_port_state state;
 
@@ -522,7 +523,7 @@ struct ofpbuf *ofputil_encode_switch_features(
     const struct ofputil_switch_features *, enum ofputil_protocol,
     ovs_be32 xid);
 void ofputil_put_switch_features_port(const struct ofputil_phy_port *,
-                                      struct ofpbuf *);
+                                      struct ofpbuf *, const char *port_name);
 bool ofputil_switch_features_ports_trunc(struct ofpbuf *b);
 
 /* phy_port helper functions. */
